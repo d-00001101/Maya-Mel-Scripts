@@ -1,0 +1,47 @@
+/*
+    daReplaceObject();
+    -select new object and object that you want to replace
+    -run script
+*/
+
+proc da_replaceObject(){
+    string $objs[] = `ls -sl -an`;
+
+    int $size = size($objs);
+
+    for ($i = 1; $i < $size; $i++) {
+        print($objs[$i] + "\n");
+        da_replace($objs[0], $objs[$i]);
+    } 
+}
+
+
+proc da_replace (string $objA, string $objB){
+    //string $objs[] = `ls -sl -an`;
+    string $new[] = `duplicate $objA`;
+
+    string $parent[] = `listRelatives -p -f $objB`;
+
+    parent $new[0] $parent[0];
+
+    float $trans[] = `getAttr ($objB + ".translate")`;
+    float $rot[] = `getAttr ($objB + ".rotate")`; 
+    float $scale[] = `getAttr ($objB + ".scale")`; 
+
+    delete $objB;
+
+    setAttr ($new[0] + ".tx") $trans[0];
+    setAttr ($new[0] + ".ty") $trans[1];
+    setAttr ($new[0] + ".tz") $trans[2];
+
+    setAttr ($new[0] + ".rx") $rot[0];
+    setAttr ($new[0] + ".ry") $rot[1];
+    setAttr ($new[0] + ".rz") $rot[2];
+
+    setAttr ($new[0] + ".scaleX") $scale[0];
+    setAttr ($new[0] + ".scaleY") $scale[1];
+    setAttr ($new[0] + ".scaleZ") $scale[2];
+}
+
+
+
