@@ -1,0 +1,332 @@
+
+// daConverMelToCPP 1.4
+// This procedure converts a mel file into a const char variable to be used 
+// within a cpp project.
+//
+// Before you use the script, open your mel file in a text editor 
+// and remove any commented lines.  This script does not escape forward slashes.
+//
+// Execute the procedure to open the UI:  daConvertMelToCPP_UI();
+// The script creates a folder in the current project directory named "cpp".
+// The new header file will be located in the "cpp" folder
+
+
+
+
+proc string daConvertMelToCPP(string $melFile, string $headerNameTextField )
+{
+	//print ($melFile + "\n");
+
+	//get the header name form text field
+	string $da_HeaderName = `textField -q -tx $headerNameTextField`;
+		//print ("this is the header name - " + $da_HeaderName + "\n");
+
+	if($da_HeaderName == "")
+	{
+		error "Please specify the name of header file";
+	}
+
+	//stop recording the history
+	scriptEditorInfo -writeHistory false;
+
+
+	//open the text file
+	$fileId=`fopen $melFile "r"`;
+	//get the first line from the file
+	string $nextLine = `fgetline $fileId`;
+	//print("This is the first line - " + $nextLine + "\n");
+	//array iterator
+	int $i = 0;
+
+	//string array of individual text lines
+	string $textLines[];
+
+	//iterate through lines until there are no more
+	//for every line in file check if line is empty
+	//if it is empty then dont increment element
+	//if it is not empty, remove all empty spaces
+	while ( size( $nextLine ) > 0 ) 
+	{
+		$textLines[$i] = $nextLine;
+		//print( "Line : " + $i + " -> " + $textLines[$i]);
+		string $temp;
+		$temp = removeStringEmptySpaces( $textLines[$i] );
+		if($temp != "")
+		{
+			$textLines[$i] = $temp;
+			
+			//escape quotation marks
+			$textLines[$i] = escapeQuotationMarks( $textLines[$i] );
+			$i++;
+		}
+		$nextLine = `fgetline $fileId`;
+
+		
+	}
+	fclose $fileId;
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+	//print($textLines);
+
+	string $fullLines[];
+	string $treatedLines[];
+	string $buffer[];
+	int $numTokens;
+	string $currentLine;
+	int $lineNum = 0;
+	for ($currentLine in $textLines)
+	{
+		//parses line using the next line key
+		$numTokens = `tokenize $currentLine "\n" $buffer`;
+		//print("Tokens in line " + $lineNum + " = " + $numTokens + "\n");
+		//print($buffer);
+
+		//(" \" " + $buffer[0] + " \" \\ ");
+		$treatedLines[$lineNum] = ("\"" + $buffer[0] + " \"\\");
+	
+		$lineNum++;
+	}
+
+
+
+
+	//add the name of the char variable to the beginning of the array of lines
+	string $charVarName = ("const char* " + $da_HeaderName + "CHAR = ");
+	$treatedLines[0] = $charVarName + $treatedLines[0];
+
+
+
+
+
+
+
+
+
+	//clear history to start off fresh
+	//scriptEditorInfo -clearHistory;
+
+
+	//get the workspace
+	string $workspace = `workspace -q -rd`;
+		//print ("LINE: 2225 workspace:\n" + $workspace  + "\n");
+
+
+	//create cpp folder path string
+	string $cppFolderPath = ( $workspace + "cpp");
+		//print("cppFolderPath = " + $cppFolderPath + "\n");
+
+
+	//check if cpp folder exists
+	int $cppFolderExists = `filetest -d $cppFolderPath`;
+		//print("does cpp folder exist? " + $cppFolderExists + "\n");
+
+
+	//if cpp folder does not exist, create the cpp folder
+	if(!$cppFolderExists)
+	{
+		sysFile -makeDir $cppFolderPath;
+
+	}
+
+	
+	//create the string for the file for output
+	string $fileForOutput = ($cppFolderPath + "/" + $da_HeaderName + ".h");
+	//print("this is the output string = " + $fileForOutput + "\n");
+
+	//create the file for output
+	cmdFileOutput -o $fileForOutput;
+	print($treatedLines);
+	cmdFileOutput -c 1;
+
+
+	clear $treatedLines;
+
+	//clear history
+	//scriptEditorInfo -clearHistory;
+
+    print ($fileForOutput);
+	return $fileForOutput;
+
+}
+
+
+
+
+
+
+
+
+
+proc string daLoadMelFile(string $textField)
+{
+	
+	string $melFile = `fileDialog -m 0`;
+
+
+	if($melFile == "")
+	{
+		error "No File Selected";
+	}
+	else
+	{
+		textField -e -tx $melFile $textField;
+	
+	}
+	
+	return $melFile;	
+}
+
+
+
+
+
+
+
+
+
+//this proc removes all empty spaces from the line
+//if the line is empty then it returns an empty line
+proc string removeStringEmptySpaces( string $line )
+{
+	string $returnString;
+
+	string $bufferB[];
+	string $completeLine;
+	int $size;
+
+
+
+	//this bit checks to see if there is anything in the line
+	//checks if there is anything in between the spaces
+	tokenize $line $bufferB;
+	$size = size($bufferB);
+
+
+	if( ($size >= 1) && ($bufferB[0] != "") )
+	{
+		//this bit takes a line and replaces tab spaces with single spaces
+
+		tokenize $line "\t" $bufferB;
+		$size = size($bufferB);
+
+		if($size == 1)
+		{
+			if($bufferB[0] == "")
+			{	
+				$returnString = "";
+			}
+			else
+			{
+				$returnString = $bufferB[0];
+			}
+		}
+		if($size > 1)
+		{
+			int $i = 1;
+			$returnString = $bufferB[0];
+			for($i; $i <= $size; $i++)
+			{
+				$returnString = $returnString+ " " + $bufferB[$i];
+			}
+		}
+	}
+	
+	return $returnString;
+}
+
+
+
+
+
+
+
+
+
+
+
+//this proc finds and escapes all forward slash marks (//)
+proc string escapeQuotationMarks( string $line )
+{
+	string $returnString;
+
+	string $bufferB[];
+	string $completeLine;
+	int $size;
+
+
+
+	//this bit checks to see if there is anything in the line
+	//checks if there is anything in between the spaces
+	tokenize $line $bufferB;
+	$size = size($bufferB);
+
+
+	if( ($size >= 1) && ($bufferB[0] != "") )
+	{
+		//this bit takes a line and replaces tab spaces with single spaces
+
+		tokenize $line "\"" $bufferB;
+		$size = size($bufferB);
+
+		if($size == 1)
+		{
+			if($bufferB[0] == "")
+			{	
+				$returnString = "";
+			}
+			else
+			{
+				$returnString = $bufferB[0];
+			}
+		}
+		if($size > 1)
+		{
+			int $i = 1;
+			$returnString = $bufferB[0];
+			for($i; $i <= $size; $i++)
+			{
+				$returnString = $returnString + "\\\"" + $bufferB[$i];
+			}
+		}
+	}
+	
+	return $returnString;
+}
+
+
+
+
+
+
+
+
+
+proc daConvertMelToCPP_UI()
+{
+	string $melFile;
+	string $window = `window -title "Convert Mel To C++"
+	       -iconName "Mel to C++"
+	       -widthHeight 200 55`;
+	columnLayout -adjustableColumn true;
+		$melFileTextField = `textField "daMelTextField"`;
+	       button -label "Load Text File" -c "$melFile = daLoadMelFile( \"daMelTextField\" )";
+	    separator;
+	    separator;
+		text -align left -l "  New Name" -fn "boldLabelFont";
+		string $headerNameTextField = `textField "da_HeaderNameTextField"`;
+		button -label "Convert" -c "daConvertMelToCPP( $melFile, \"da_HeaderNameTextField\" )";
+	       button -label "Close" -command ("deleteUI -window " + $window);
+	setParent ..;
+	showWindow $window;
+}
+
+
+

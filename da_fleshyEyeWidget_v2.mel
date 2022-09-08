@@ -1,0 +1,430 @@
+// This procedure creates a fleshy eye widget that controls
+// the blendshape targets associated with the eyeball.                                
+//                                                                                      
+//	-shift select the parent joint and the eyeball - these two nodes   
+//	 should have the same position.                                                   
+//	-run procedure - daFleshyEyeWidgetUI();                                                  
+//	-connect the blendshape target weights to the corresponding weight attrs
+//       created on the joint.                                                                                     
+//      -model the widget curve so that it deleneates the extreme orientations of the eyeball
+                               
+
+
+
+proc daFleshyEyeWidget ( string $name, vector $direction)
+{
+
+	//vector $direction = <<0, 0, 1>>;
+	string $parentChild[] = `ls -sl`;
+
+	if(size($parentChild) < 2)
+	{
+		error("Please select the parent joint and eyeball geometry.");
+	}
+
+	string $eyeBall = $parentChild[1];
+	string $childJT = $parentChild[0];
+
+	//retrieve joint worldspace positions
+	vector $parentPos = `xform -q -ws -t $childJT`;
+	vector $childPos = `xform -q -ws -t $eyeBall`;
+
+	string $newParent[] = `duplicate -n ( $name + "_widget_jt") $childJT`;
+
+	parent $childJT $newParent[0];
+	parent $eyeBall $childJT;
+
+
+
+
+	
+	//create the blendshape driver attrs
+	if(!`attributeExists "left" $childJT`)
+	{
+
+		addAttr -ln "left"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable false  -channelBox false  ($childJT + ".left");
+		addAttr -ln "leftWeight"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable true ($childJT + ".leftWeight");
+
+		addAttr -ln "leftDown"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable false  -channelBox false  ($childJT + ".leftDown");
+		addAttr -ln "leftDownWeight"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable true ($childJT + ".leftDownWeight");
+
+		addAttr -ln "down"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable false  -channelBox false  ($childJT + ".down");
+		addAttr -ln "downWeight"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable true ($childJT + ".downWeight");
+
+		addAttr -ln "rightDown"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable false  -channelBox false  ($childJT + ".rightDown");
+		addAttr -ln "rightDownWeight"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable true ($childJT + ".rightDownWeight");
+
+		addAttr -ln "right"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable false  -channelBox false  ($childJT + ".right");
+		addAttr -ln "rightWeight"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable true ($childJT + ".rightWeight");
+
+		addAttr -ln "rightUp"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable false  -channelBox false  ($childJT + ".rightUp");
+		addAttr -ln "rightUpWeight"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable true ($childJT + ".rightUpWeight");
+
+		addAttr -ln "up"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable false  -channelBox false  ($childJT + ".up");
+		addAttr -ln "upWeight"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable true ($childJT + ".upWeight");
+
+		addAttr -ln "leftUp"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable false  -channelBox false  ($childJT+ ".leftUp");
+		addAttr -ln "leftUpWeight"  -at double  -dv 0 $childJT;
+		setAttr -e-keyable true ($childJT+ ".leftUpWeight");
+
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	//create all locators and position them
+	string $centerLocator[] = `spaceLocator -n ($name + "_centerLoc")`;
+		setAttr ($centerLocator[0] + ".overrideEnabled") 1;
+		setAttr ($centerLocator[0] + ".overrideVisibility") 0;
+		setAttr ($centerLocator[0] + ".intermediateObject") 1;
+	//print $centerLocator[0];
+	move -a ($parentPos.x) ($parentPos.y) ($parentPos.z);
+	//rename $centerLocator[0] "center_locator";
+	string $basisLocator[] = `duplicate -n ($name + "_basisLoc") $centerLocator[0]`;
+		setAttr ($basisLocator[0] + ".overrideEnabled") 1;
+		setAttr ($basisLocator[0] + ".overrideVisibility") 0;
+		setAttr ($basisLocator[0] + ".intermediateObject") 1;  
+	move -r ($direction.x) ($direction.y) ($direction.z);
+	//point locator is aligned with the iris of the eye
+	string $pointLocator[] = `duplicate -n ($name + "_pointLoc") $basisLocator[0]`;
+		setAttr ($pointLocator[0] + ".overrideEnabled") 1;
+		setAttr ($pointLocator[0] + ".overrideVisibility") 0;
+		setAttr ($pointLocator[0] + ".intermediateObject") 1;
+	//print $pointLocator[0];
+	string $paramLocator[] = `duplicate -n ($name + "_paramLoc") $basisLocator[0]`;
+		setAttr ($paramLocator[0] + ".overrideEnabled") 1;
+		setAttr ($paramLocator[0] + ".overrideVisibility") 0;
+		setAttr ($paramLocator[0] + ".intermediateObject") 1;
+	//print $paramLocator[0];
+
+
+	//constrain locators to their parents
+	string $centerLoc_ParentConstraint[] = `parentConstraint -mo -weight 1 $newParent[0] $centerLocator[0]`;
+	string $basisLoc_ParentConstraint[] = `parentConstraint -mo -weight 1 $newParent[0] $basisLocator[0]`;
+	string $pointLoc_ParentConstraint[] = `parentConstraint -mo -weight 1 $childJT $pointLocator[0]`;
+
+
+
+	//create the surface eye socket which produces the closest u param to the center of the iris
+	//using the closestPointOnSurface node
+	string $eyeSocket[] = `cylinder 	-p 0 0 0 
+						-ax ($direction.x) ($direction.y) ($direction.z) 
+						-ssw 0 
+						-esw 360 
+						-r 1 
+						-hr 0.1 
+						-d 3 
+						-ut 0 
+						-tol 0.01 
+						-s 8 
+						-nsp 1 
+						-ch 0 
+						-n ($name + "_socket")`;
+
+	rebuildSurface -ch 0 -rpo 1 -rt 0 -end 1 -kr 0 -kcp 1 -kc 0 -su 0 -du 3 -sv 0 -dv 3 -tol 0.01 -fr 0  -dir 2 $eyeSocket[0];
+	move -a ($parentPos.x) ($parentPos.y) ($parentPos.z) $eyeSocket[0]; 
+	parent $eyeSocket[0] $newParent[0];
+
+	string $eyeSocketShape[] = `listRelatives -s $eyeSocket[0]`;
+	setAttr ($eyeSocketShape[0] + ".intermediateObject") 1;
+
+	//lock translation attrs and add custom attrs
+	setAttr -lock true ($eyeSocket[0] + ".tx");
+	setAttr -lock true ($eyeSocket[0] + ".ty");
+	setAttr -lock true ($eyeSocket[0] + ".tz");
+	setAttr -lock true ($eyeSocket[0] + ".rx");
+	setAttr -lock true ($eyeSocket[0] + ".ry");
+	setAttr -lock true ($eyeSocket[0] + ".rz");
+	setAttr -lock true ($eyeSocket[0] + ".sx");
+	setAttr -lock true ($eyeSocket[0] + ".sy");
+	setAttr -lock true ($eyeSocket[0] + ".sz");
+
+	string $closestPointOnSurfaceNode = `createNode closestPointOnSurface`; 
+
+	connectAttr -f ($eyeSocketShape[0] + ".worldSpace[0]") ($closestPointOnSurfaceNode + ".inputSurface");
+	connectAttr -f ($pointLocator[0] + ".translate") ($closestPointOnSurfaceNode + ".inPosition");
+	
+
+
+	//create the circle which will produce the position of the param locator
+	//the eyesockket and closestPointOnSurface produce the U parameter closest to the iris
+	//this U parameter is fed into the pointOnCurveInfo node to retrieve 
+	//the world space position of the U parameter
+	//the world space position is connected to the translation of the param_locator
+	string $widget[] = `circle -c 0 0 0 -nr 0 0 -1 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 0 -n ($name + "_Widget")`;
+	//print $widget[0];
+	select -r ($widget[0] + ".u[6]") ;
+	moveNurbsCurveSeam;
+	rebuildCurve -ch 0 -rpo 1 -rt 0 -end 1 -kr 0 -kcp 1 -kep 1 -kt 0 -s 5 -d 3 -tol 0.01 $widget[0];
+	move -a ($parentPos.x) ($parentPos.y) ($parentPos.z) $widget[0];
+	parent $widget[0] $newParent[0];
+
+	string $pointOnCurveInfoNode = `createNode pointOnCurveInfo -n ($name + "_POCIN")`;
+
+	string $widgetShape[] = `listRelatives -s $widget[0]`;
+	connectAttr -f ($widgetShape[0] + ".worldSpace[0]") ($pointOnCurveInfoNode + ".inputCurve");
+
+	connectAttr -f ($closestPointOnSurfaceNode + ".parameterV") ($pointOnCurveInfoNode + ".parameter");
+	connectAttr -f ($pointOnCurveInfoNode + ".position") ($paramLocator[0] + ".translate");
+
+
+	//lock translation attrs and add custom attrs
+	setAttr -lock true ($widget[0] + ".tx");
+	setAttr -lock true ($widget[0] + ".ty");
+	setAttr -lock true ($widget[0] + ".tz");
+	setAttr -lock true ($widget[0] + ".rx");
+	setAttr -lock true ($widget[0] + ".ry");
+	setAttr -lock true ($widget[0] + ".rz");
+
+	addAttr -ln Basis_angle -at double  $widget[0];
+	setAttr -e -keyable true ($widget[0] + ".Basis_angle");
+	addAttr -ln Point_angle -at double  $widget[0];
+	setAttr -e -keyable true ($widget[0] + ".Point_angle");
+	addAttr -ln Uparam -at double  -min 0 -max 1 $widget[0];
+	setAttr -e -keyable true ($widget[0] + ".Uparam");
+	addAttr -ln influence -at double  -min 0 -max 1 $widget[0];
+	setAttr -e -keyable true ($widget[0] + ".influence");
+	
+
+	setAttr -keyable false -channelBox false ($widget[0] + ".Basis_angle");;
+	setAttr -keyable false -channelBox false ($widget[0] + ".Point_angle");;
+
+
+	//calculate the vectors necessary.  We the calculate the angle between basis vector
+	//and param vector, basis vector and point vector.  We then divide the point angle by
+	//the param angle to get a percentage - influence.
+	string $basisVec_plusMinusAvrgNode = `createNode plusMinusAverage -n ($name + "_basisVecPMA")`;
+	setAttr ($basisVec_plusMinusAvrgNode + ".operation") 2;
+	connectAttr -f ($basisLocator[0] + ".translate") ($basisVec_plusMinusAvrgNode + ".input3D[0]");
+	connectAttr -f ($centerLocator[0] + ".translate") ($basisVec_plusMinusAvrgNode + ".input3D[1]");
+	//print $centerLocator[0];
+
+	string $pointVec_plusMinusAvrgNode = `createNode plusMinusAverage -n ($name + "_pointVecPMA")`;
+	setAttr ($pointVec_plusMinusAvrgNode + ".operation") 2;
+	connectAttr -f ($pointLocator[0] + ".translate") ($pointVec_plusMinusAvrgNode + ".input3D[0]");
+	connectAttr -f ($centerLocator[0] + ".translate") ($pointVec_plusMinusAvrgNode + ".input3D[1]");
+
+	string $paramVec_plusMinusAvrgNode = `createNode plusMinusAverage -n ($name + "_paramVecPMA")`;
+	setAttr ($paramVec_plusMinusAvrgNode + ".operation") 2;
+	connectAttr -f ($paramLocator[0] + ".translate") ($paramVec_plusMinusAvrgNode + ".input3D[0]");
+	connectAttr -f ($centerLocator[0] + ".translate") ($paramVec_plusMinusAvrgNode + ".input3D[1]");
+
+
+	string $basisAngleBetween = `createNode angleBetween -n ($name + "_basisAngleAB")`;
+	connectAttr -f ($basisVec_plusMinusAvrgNode + ".output3D") ($basisAngleBetween + ".vector1");
+	connectAttr -f ($paramVec_plusMinusAvrgNode + ".output3D") ($basisAngleBetween + ".vector2");
+
+	string $pointAngleBetween = `createNode angleBetween -n ($name + "_pointAngleAB")`;
+	connectAttr -f ($basisVec_plusMinusAvrgNode + ".output3D") ($pointAngleBetween + ".vector1");
+	connectAttr -f ($pointVec_plusMinusAvrgNode + ".output3D") ($pointAngleBetween + ".vector2");
+
+	string $multDivideNode = `createNode multiplyDivide -n ($name + "_MD")`;
+	setAttr ($multDivideNode + ".operation") 2;
+	connectAttr -f ($pointAngleBetween + ".angle") ($multDivideNode + ".input1X");
+	connectAttr -f ($basisAngleBetween + ".angle") ($multDivideNode + ".input2X");
+
+	//select $multDivideNode;
+	connectAttr -f ($multDivideNode + ".outputX") ($widget[0] + ".influence");
+	connectAttr -f ($basisAngleBetween + ".angle") ($widget[0] + ".Basis_angle");
+	connectAttr -f ($pointAngleBetween + ".angle") ($widget[0] + ".Point_angle");
+	connectAttr -f ($closestPointOnSurfaceNode + ".parameterV") ($widget[0] + ".Uparam");
+
+
+	if(`attributeExists "left" $childJT`)
+	{
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv 0    -itt "flat" -ott "flat" -v 1  ($childJT + ".left") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .125 -v 0  ($childJT + ".left") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .875 -v 0  ($childJT + ".left") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .999 -itt "flat" -v 1  ($childJT + ".left") ;
+
+		string $mdNode = `createNode multiplyDivide -n ($name + "_leftMD")`;
+		connectAttr -f ($widget[0] + ".influence")  ($mdNode + ".input1X");
+		connectAttr -f ($childJT + ".left") ($mdNode + ".input2X");
+		connectAttr -f ($mdNode + ".outputX") ($childJT + ".leftWeight");
+
+
+
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv 0    -itt "flat" -ott "flat" -v 0  ($childJT + ".leftDown") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .125    -itt "flat" -ott "flat" -v 1  ($childJT + ".leftDown") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .25    -itt "flat" -ott "flat" -v 0  ($childJT + ".leftDown") ;
+
+		$mdNode = `createNode multiplyDivide -n ($name + "_leftDownMD")`;
+		connectAttr -f ($widget[0] + ".influence")  ($mdNode + ".input1X");
+		connectAttr -f ($childJT + ".leftDown") ($mdNode + ".input2X");
+		connectAttr -f ($mdNode + ".outputX") ($childJT + ".leftDownWeight");
+
+
+
+
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .125    -itt "flat" -ott "flat" -v 0  ($childJT + ".down") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .25    -itt "flat" -ott "flat" -v 1  ($childJT + ".down") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .375    -itt "flat" -ott "flat" -v 0  ($childJT + ".down") ;
+
+		$mdNode = `createNode multiplyDivide -n ($name + "_downMD")`;
+		connectAttr -f ($widget[0] + ".influence")  ($mdNode + ".input1X");
+		connectAttr -f ($childJT + ".down") ($mdNode + ".input2X");
+		connectAttr -f ($mdNode + ".outputX") ($childJT + ".downWeight");
+
+
+
+
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .25    -itt "flat" -ott "flat" -v 0  ($childJT + ".rightDown") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .375    -itt "flat" -ott "flat" -v 1  ($childJT + ".rightDown") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .5    -itt "flat" -ott "flat" -v 0  ($childJT + ".rightDown") ;
+
+		$mdNode = `createNode multiplyDivide -n ($name + "_rightDownMD")`;
+		connectAttr -f ($widget[0] + ".influence")  ($mdNode + ".input1X");
+		connectAttr -f ($childJT + ".rightDown") ($mdNode + ".input2X");
+		connectAttr -f ($mdNode + ".outputX") ($childJT + ".rightDownWeight");
+
+
+
+
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .375    -itt "flat" -ott "flat" -v 0  ($childJT + ".right") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .5    -itt "flat" -ott "flat" -v 1  ($childJT + ".right") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .625    -itt "flat" -ott "flat" -v 0  ($childJT + ".right") ;
+
+		$mdNode = `createNode multiplyDivide -n ($name + "_rightMD")`;
+		connectAttr -f ($widget[0] + ".influence")  ($mdNode + ".input1X");
+		connectAttr -f ($childJT + ".right") ($mdNode + ".input2X");
+		connectAttr -f ($mdNode + ".outputX") ($childJT + ".rightWeight");
+
+
+
+
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .5    -itt "flat" -ott "flat" -v 0  ($childJT + ".rightUp") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .625    -itt "flat" -ott "flat" -v 1  ($childJT + ".rightUp") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .75    -itt "flat" -ott "flat" -v 0  ($childJT + ".rightUp") ;
+
+		$mdNode = `createNode multiplyDivide -n ($name + "_rightUpMD")`;
+		connectAttr -f ($widget[0] + ".influence")  ($mdNode + ".input1X");
+		connectAttr -f ($childJT + ".rightUp") ($mdNode + ".input2X");
+		connectAttr -f ($mdNode + ".outputX") ($childJT + ".rightUpWeight");
+
+
+
+
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .625    -itt "flat" -ott "flat" -v 0  ($childJT + ".up") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .75    -itt "flat" -ott "flat" -v 1  ($childJT + ".up") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .875    -itt "flat" -ott "flat" -v 0  ($childJT + ".up") ;
+
+		$mdNode = `createNode multiplyDivide -n ($name + "_upMD")`;
+		connectAttr -f ($widget[0] + ".influence")  ($mdNode + ".input1X");
+		connectAttr -f ($childJT + ".up") ($mdNode + ".input2X");
+		connectAttr -f ($mdNode + ".outputX") ($childJT + ".upWeight");
+
+
+
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .75    -itt "flat" -ott "flat" -v 0  ($childJT + ".leftUp") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .875    -itt "flat" -ott "flat" -v 1  ($childJT + ".leftUp") ;
+		setDrivenKeyframe -currentDriver ($widget[0] + ".Uparam") -dv .999    -itt "flat" -ott "flat" -v 0  ($childJT + ".leftUp") ;
+
+		$mdNode = `createNode multiplyDivide -n ($name + "_leftUpMD")`;
+		connectAttr -f ($widget[0] + ".influence")  ($mdNode + ".input1X");
+		connectAttr -f ($childJT + ".leftUp") ($mdNode + ".input2X");
+		connectAttr -f ($mdNode + ".outputX") ($childJT + ".leftUpWeight");
+
+		
+	}
+
+	select -r $widget[0];
+}
+
+
+
+proc daFleshyEyeWidgetUI()
+{
+	string $window = `window -title "Fleshy Eye Widget"
+       	-iconName "Widget"
+       	-widthHeight 240 100
+		-sizeable 1
+		-resizeToFitChildren 1`;
+
+	columnLayout -adjustableColumn true;
+
+		rowLayout -numberOfColumns 2
+    				-columnWidth2 40 200
+    				-columnAlign  1 "right";
+    			text -align "right" 
+				-ann "Please select the parent joint and eyeball geometry." 
+				-l "Name ";
+    			string $nameText = `textField -w 200 "nameTextField"`;
+		setParent ..;
+
+	separator -h 10 -style "in";
+
+	string $axisRadioButtonGrp = `radioButtonGrp -numberOfRadioButtons 3
+				-ann "Please select the parent joint and eyeball geometry." 
+    				-label "Axis" 
+				-labelArray3 "X" "Y" "Z"
+				-cw 1 40 -cw 2 70 -cw 3 70 -cw 4 60
+				-sl 3 "axisRadioButtonGrp"`;
+
+	separator -h 10 -style "in";
+
+	button -ann "Please select the parent joint and eyeball geometry." -label "Create" -w 240
+		-c ( "calldaFleshyEyeWidget( \"" + $nameText + "\",\"" + $axisRadioButtonGrp + "\");" );
+
+
+	setParent ..;
+	showWindow $window;
+}
+
+
+proc calldaFleshyEyeWidget(string $textField, string $radioButtonGrp)
+{
+	string $nameText = `textField -q -text $textField`;
+	print("This is the name - " + $nameText + "\n");
+	string $radioButton  = `radioButtonGrp -q -sl $radioButtonGrp`;
+	print("This is the radio button selected - " + $radioButton + "\n");
+	
+	vector $axisVec = <<0,0,1>>;
+	
+	switch($radioButton)
+	{
+		case "x":
+		$axisVec = <<1,0,0>>;
+		break;
+
+		case "y":
+		$axisVec = <<0,1,0>>;
+		break;
+
+		case "z":
+		$axisVec = <<0,0,1>>;
+		break;
+	}
+
+	daFleshyEyeWidget( $nameText, $axisVec );
+}
+
+
+
+
+
+
+
+

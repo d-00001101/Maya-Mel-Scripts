@@ -1,0 +1,315 @@
+//This proc converts geometry into instances for use in dynamic simulations.
+//The proc will create a particle object whos particles are placed within the
+//geometry objects and an instancer node that replaces the geometry with instances.
+//The original geometry will be hidden.
+
+//You have 2 ways of controlling the rotation of the particles. 
+// 
+//By default, the particles rotate within a ground and ceiling space.
+//This control is good if you want geometry to stop rotating if they fall below
+//a certain Y position value.  This is good if you want your debree to slide along a slippery surface.
+//
+//The second control overrides the first.  By setting "Use Velocity" to ON, the amount of rotation
+//will be determined by the velocity of the particle.
+//
+//All rotations can be scaled by the "Global Rotation" attribute.
+//
+//minRot and maxRot attributes determine the intensity of initial random rotation - 0 to 1 produces predictable values
+//but the attrs are there nevertheless
+//
+//enjoy.  email me with suggestions.
+
+//--------Select all the geometry that you want to instance and 
+//--------run procedure ->  daInstanceGeoWindow();
+//If geometry dissapears - reset transformamtion values
+
+
+
+proc da_instanceMyGeometry(string $particleObject, string $particleIntance, int $useMass )
+{
+	if(`objExists $particleObject`)
+	{
+	error("Choose a different name for the particle object.");
+	}
+
+	if(`objExists $particleIntance`)
+	{
+	error("Choose a different name for the instancer node.");
+	}
+
+
+	string $fragments[] = `ls -sl`;
+	//print (size($fragments));
+
+	vector $fragPos[];
+
+	string $currentFrag;
+	int $i = 1;
+
+	particle -n $particleObject;
+
+	string $partShapes[] = `listRelatives -c $particleObject`;
+
+	particleInstancer  -name $particleIntance -cycle None -cycleStep 1 -cycleStepUnits Frames -levelOfDetail Geometry -rotationUnits Degrees -rotationOrder XYZ -position worldPosition -age age $particleObject;
+	
+	setAttr ($partShapes[0] + ".lifespanMode") 3;
+
+
+
+
+	addAttr -ln "globalMassScale" -at double  -min .01 -dv 1 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".globalMassScale");
+	addAttr -ln "minMass" -at double  -min .01 -dv 1 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".minMass");
+	addAttr -ln "maxMass" -at double  -min .02 -dv 2 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".maxMass");
+	addAttr -ln "massScale" -dt doubleArray  $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".massScale");
+	addAttr -ln "myU" -dt doubleArray  $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".myU");
+
+	string $arrayMapper[] = `arrayMapper -target $partShapes[0] -destAttr massScale -type ramp`;
+
+
+
+
+
+	addAttr -ln "globalRotation" -at double  -dv 1 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".globalRotation");
+	addAttr -ln "startRotation0" -dt vectorArray  $partShapes[0];
+	addAttr -ln "startRotation" -dt vectorArray  $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".startRotation");
+	addAttr -ln "minRotX" -at double  -min 0 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".minRotX");
+	addAttr -ln "minRotY" -at double  -min 0 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".minRotY");
+	addAttr -ln "minRotZ" -at double  -min 0 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".minRotZ");
+	addAttr -ln "maxRotX" -at double  -dv 1 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".maxRotX");
+	addAttr -ln "maxRotY" -at double  -dv 1 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".maxRotY");
+	addAttr -ln "maxRotZ" -at double  -dv 1 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".maxRotZ");
+	addAttr -ln "rotOffset0" -dt doubleArray  $partShapes[0];
+	addAttr -ln "rotOffset" -dt doubleArray  $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".rotOffset");
+
+
+
+	addAttr -ln "useVelocity" -at bool  $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".useVelocity");
+
+	addAttr -ln "ground" -at double  -dv 0 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".ground");
+	addAttr -ln "ceiling" -at double  -dv 100 $partShapes[0];
+	setAttr -e -keyable true ($partShapes[0] + ".ceiling");
+
+
+	
+
+	dynExpression -s ("\r\nfloat $randx = rand(" + $partShapes[0] + ".minRotX," + $partShapes[0] + ".maxRotX);\r\nfloat $randy = rand(" + $partShapes[0] + ".minRotY, " + $partShapes[0] + ".maxRotY);\r\nfloat $randz = rand(" + $partShapes[0] + ".minRotZ, " + $partShapes[0] + ".maxRotZ);\r\n\r\n" + $partShapes[0] + ".rotOffset = << $randx, $randy, $randz >>;\r\n\r\nmass*= globalMassScale;") -c $partShapes[0];
+
+	//dynExpression -s ("vector $myPos = " + $partShapes[0] + ".position;\r\n\r\nif (" + $partShapes[0] + ".useVelocity)\r\n\t{\t\r\n\t\t\r\n\t\tvector $myVel = " + $partShapes[0] + ".velocity;\r\n\t\tvector $rotOffset = " + $partShapes[0] + ".rotOffset;\r\n\t\t\r\n\t\tmy" + $partShapes[0] + ".startRotation += << ($myVel.x * $rotOffset.x)*" + $partShapes[0] + ".globalRotation, ($myVel.y * $rotOffset.y)*" + $partShapes[0] + ".globalRotation, ($myVel.z * $rotOffset.z)*" + $partShapes[0] + ".globalRotation >>;\r\n\r\n\t}\r\n\r\nelse if (( $myPos.y < " + $partShapes[0] + ".ceiling ) && ( $myPos.y > " + $partShapes[0] + ".ground))\r\n\t{\r\n\t\t\t" + $partShapes[0] + ".startRotation += " + $partShapes[0] + ".rotOffset * " + $partShapes[0] + ".globalRotation;\r\n\t}") -rbd $partShapes[0];
+	dynExpression -s "vector $myPos = position;\r\n\r\nif (useVelocity)\r\n{\r\n\tvector $myVel = velocity;\r\n\tvector $rotOffset = rotOffset;\r\n\tstartRotation += << ($myVel.x * $rotOffset.x)*globalRotation, ($myVel.y * $rotOffset.y)*globalRotation, ($myVel.z * $rotOffset.z)*globalRotation >>;\r\n}\r\nelse if (( $myPos.y < ceiling ) && ( $myPos.y > ground))\r\n{\r\n\tstartRotation += rotOffset * globalRotation;\r\n}\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r" -rbd $partShapes[0];
+
+
+
+	particleInstancer -e -name $particleIntance -rotation startRotation $partShapes[0];
+
+
+	float $particleVolume;
+
+	float $tempMin = 1000000;
+	float $tempMax = 0;
+	
+	for ($currentFrag in $fragments)
+	{
+		xform -cp $currentFrag;
+		float $bbMinX = `getAttr ($currentFrag + ".boundingBox.boundingBoxMin.boundingBoxMinX")`;
+		float $bbMinY = `getAttr ($currentFrag + ".boundingBox.boundingBoxMin.boundingBoxMinY")`;
+		float $bbMinZ = `getAttr ($currentFrag + ".boundingBox.boundingBoxMin.boundingBoxMinZ")`;
+
+		float $bbMaxX = `getAttr ($currentFrag + ".boundingBox.boundingBoxMax.boundingBoxMaxX")`;
+		float $bbMaxY = `getAttr ($currentFrag + ".boundingBox.boundingBoxMax.boundingBoxMaxY")`;
+		float $bbMaxZ = `getAttr ($currentFrag + ".boundingBox.boundingBoxMax.boundingBoxMaxZ")`;
+		
+		$particleVolume = abs(($bbMinX - $bbMaxX)*($bbMinY - $bbMaxY)*($bbMinZ - $bbMaxZ));
+
+		if($particleVolume < $tempMin) $tempMin = $particleVolume;
+		if($particleVolume > $tempMax) $tempMax = $particleVolume;
+		
+		
+
+		vector $particlePos = << ($bbMinX + $bbMaxX)/2,  ($bbMinY + $bbMaxY)/2,  ($bbMinZ + $bbMaxZ)/2 >>;
+		//print ( "Name:  " + $currentFrag + "\n");
+
+		move -rpr 0 0 0 $currentFrag;
+		makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 $currentFrag;
+		setAttr ($currentFrag + ".visibility") 0;
+
+		int $count = `particle -q -count $partShapes[0]`;
+		
+		if($useMass)
+		{
+			emit  -object $particleObject -pos ($particlePos.x) ($particlePos.y) ($particlePos.z);  
+			particle -e -at mass -or $count -fv $particleVolume $partShapes[0];
+		}
+		else
+		{
+			emit  -object $particleObject -pos ($particlePos.x) ($particlePos.y) ($particlePos.z);
+		}
+		particleInstancer -e -name $particleIntance -object $currentFrag -addObject ;
+		particleInstancer -e -name $particleIntance  -objectIndex particleId $partShapes[0];
+
+		$i++;
+	}
+
+	setAttr ($partShapes[0] + ".minMass") $tempMin;
+	setAttr ($partShapes[0] + ".maxMass") $tempMax;
+
+
+
+	saveInitialState $particleObject;
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+proc resetTransformationValues()
+{
+	string $myTrans[] = `ls -sl`;
+
+	//world minus rotate pivot - This value is typically used in 
+	//expressions where it is subtracted from a position before 
+	//setting the translation attribute.
+
+	string $current;
+
+	for ($current in $myTrans)
+	{
+		float $wrp[] = `getAttr ($current + ".tmrp")`;
+
+		xform -ws -t ($wrp[0]) ($wrp[1]) ($wrp[2]) $current;
+
+		makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 $current;
+
+		xform -ws -t  ($wrp[0]*-1) ($wrp[1]*-1) ($wrp[2]*-1) $current;
+	}
+}
+
+
+
+global string $poValue;
+global string $ioValue;
+
+global proc poTextChanged(string $textFieldName) 
+{
+	global string $poValue;
+
+	// query the value from the float field
+	$poValue = `textField -q -tx $textFieldName`;
+	
+	print ("inside poTextChanged.  " + $textFieldName + " = " + $poValue + "\n");
+}
+
+
+global proc ioTextChanged(string $textFieldName) 
+{
+	global string $ioValue;
+
+	// query the value from the float field
+	$ioValue = `textField -q -tx $textFieldName`;
+	
+	print ("inside ioTextChanged.  " + $textFieldName + " = " + $ioValue + "\n");
+}
+
+
+global string $poName;
+global string $ioName;
+
+
+global string $massCheckbox = "";
+
+proc daInstanceGeoWindow()
+{
+ 	string $myPOName = "";
+	string $myIOName = "";
+
+	string $window = `window 	-title "Instance Geometry"
+					-iconName "Instancer"
+					-rtf true`;
+					//-widthHeight 300 400`;
+		rowColumnLayout -numberOfColumns 1 -columnWidth 1 370;
+ 			rowColumnLayout -numberOfColumns 2 -columnAttach 1 "right" 0
+ 				-columnWidth 1 120 -columnWidth 2 250;
+ 				
+				text -label "Particle Object Name";
+ 				global string $poName; 
+				$poName = `textField`;
+				textField -e -cc ("poTextChanged( $poName );") $poName;
+
+ 				text -label "Instance Object Name";
+ 				global string $ioName;
+				$ioName = `textField`;
+				textField -e -cc ("ioTextChanged( $ioName );") $ioName;
+ 			
+ 				//Attach commands to pass focus to the next field if the Enter
+ 				//key is pressed. Hitting just the Return key will keep focus
+ 				//in the current field.
+ 				//
+ 				textField -edit -enterCommand ("setFocus " + $poName) $poName;
+ 				textField -edit -enterCommand ("setFocus " + $ioName) $ioName;
+				
+				global int $useMass; 
+ 				text -label "";
+	 			global string $massCheckbox = "";
+				$massCheckbox = `checkBox -value true -label "Use volume for mass"` ;
+	 			print("this is the checkbox = " + $massCheckbox + "\n");
+	 			checkBox -e -changeCommand ("$useMass = `checkBox -q -value $massCheckbox`; print $useMass;") $massCheckbox ;
+
+				text -label "";
+				button -ann "Use if geometry transform values are zeroed out" -label "Reset Transformation Values To World Space" -command "resetTransformationValues()";
+				text -label "";
+	 			button -label "Instance Geometry" -command ("da_instanceMyGeometry($poValue, $ioValue, $useMass)"); //-command ("updateMyWin(" + $poName + "," + $ioName + ")");
+				
+	 			
+
+				setParent;
+	 	
+	showWindow $window;
+}

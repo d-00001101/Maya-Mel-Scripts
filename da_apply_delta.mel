@@ -1,0 +1,40 @@
+/*Copyright (C) 2018 Daniel Arzabe
+
+This simple proc will compare two meshes: a base mesh and a deformed mesh.
+It then calculates the vert deltas and applies it to the third mesh.
+
+First - shift select base mesh, deformed mesh and target mesh
+Second - run proc.
+
+*/
+
+proc applyDelta() {
+    
+    string $sel[] = `ls -sl`;
+    //print $sel;
+
+    int $sizeVerts[] = `polyEvaluate -v $sel[0]`;
+
+    float $pBase[];
+    float $pDeform[];
+    float $pDelta[];
+    float $target[];
+
+    for ($i = 0; $i < $sizeVerts[0]; $i++){
+        $pBase = `xform -q -os -t ($sel[0] + ".vtx[" + $i + "]")`;
+        //print ("base: " + $pBase[0] + ", " + $pBase[1] + ", " + $pBase[2]);
+        $pDeform = `xform -q -os -t ($sel[1] + ".vtx[" + $i + "]")`;
+        //print ("\ndeform: " + $pDeform[0] + ", " + $pDeform[1] + ", " + $pDeform[2]);
+        $pDelta[0] = $pDeform[0] - $pBase[0];
+        $pDelta[1] = $pDeform[1] - $pBase[1];
+        $pDelta[2] = $pDeform[2] - $pBase[2];
+
+        //print "\n";
+        //print $pDelta;
+        //print "---\n";
+    
+        $target = `xform -q -os -t ($sel[2] + ".vtx[" + $i + "]")`;
+    
+        xform  -os -t ($target[0] + $pDelta[0]) ($target[1] + $pDelta[1]) ($target[2] + $pDelta[2]) ($sel[2] + ".vtx[" + $i + "]");
+    }
+}
