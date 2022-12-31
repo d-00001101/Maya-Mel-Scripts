@@ -1,1 +1,42 @@
-//daniel arzabe //this proc aligns the move tool to the current camera//It is useful when modeling using a series of perspective cameras that are in alignment.////Select a point and run scriptproc da_AlignMoveToolToCamera(){	string $currentPanel = `getPanel -wf`;	string $currentCam = `modelPanel -q -cam $currentPanel`;	//get the rotation values of camera	float $directionVec[] = `xform -q -ro $currentCam`;	//convert rotation values from degrees to radians	$directionVec[0] = deg_to_rad ($directionVec[0]); 	$directionVec[1] = deg_to_rad ($directionVec[1]);	$directionVec[2] = deg_to_rad ($directionVec[2]);	manipMoveContext -e -orientAxes $directionVec[0] $directionVec[1] $directionVec[2] Move;	manipMoveContext -e -mode 6 Move;	changeToolIcon;	refresh;}
+
+//Copyright 2007 Daniel Arzabe
+// 
+//this proc aligns the move tool to the current camera
+//It is useful when modeling using a series of perspective cameras that are in alignment.
+//
+//Select a point and run script
+
+proc da_AlignMoveToolToCamera()
+{
+	string $currentPanel = `getPanel -wf`;
+
+	string $currentCam = `modelPanel -q -cam $currentPanel`;
+
+	//get the rotation values of camera
+	float $directionVec[] = `xform -q -ro $currentCam`;
+
+	//convert rotation values from degrees to radians
+	$directionVec[0] = deg_to_rad ($directionVec[0]); 
+	$directionVec[1] = deg_to_rad ($directionVec[1]);
+	$directionVec[2] = deg_to_rad ($directionVec[2]);
+
+	manipMoveContext -e -orientAxes $directionVec[0] $directionVec[1] $directionVec[2] Move;
+
+	manipMoveContext -e -mode 6 Move;
+
+
+	changeToolIcon;
+
+	refresh;
+}
+
+
+
+
+
+
+
+
+
+
+
