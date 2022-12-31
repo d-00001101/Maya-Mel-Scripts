@@ -1,3 +1,6 @@
+
+//Copyright 2006 Daniel Arzabe
+//
 //This tool will allow the user to interactively track and zoom the current camera's image plane
 //by clicking and dragging in the workspace.
 //
