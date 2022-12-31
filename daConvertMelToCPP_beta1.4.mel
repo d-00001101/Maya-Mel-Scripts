@@ -1,4 +1,6 @@
 
+//Copyright Daniel Arzabe
+//
 // daConverMelToCPP 1.4
 // This procedure converts a mel file into a const char variable to be used 
 // within a cpp project.
