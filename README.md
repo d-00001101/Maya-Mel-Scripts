@@ -2,7 +2,7 @@
 A Collection of Very Old MEL Scripts That You May Find Useful
 
 # daConverMelToCPP 1.4
-This procedure converts a mel file into a const char variable to be used within a cpp project. If you are writing a simple Maya plugin and don't want to deal with tedious DAG node mangling, it is some times easier to run a MEL script from within your plugin.
+This procedure converts a mel file into a const char variable to be used within a cpp project. If you are writing a Maya plugin and don't want to deal with a stack of MEL files, it can be neater to include the MEL scripts in your plugin.
 
 # daPanAndScanTool
 This obsolete tool will allow the user to interactively track and zoom the current camera's image plane by clicking and dragging in the workspace. It can be used to model accurately from photographic references using a camera that matches the focal length and film back settings of the camera used to capture the image. This functionality is now implemented in Autodesk Maya.
