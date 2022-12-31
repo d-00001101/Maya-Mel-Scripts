@@ -1,3 +1,5 @@
+//Copyright 2005 Daniel Arzabe
+
 //This proc converts geometry into instances for use in dynamic simulations.
 //The proc will create a particle object whos particles are placed within the
 //geometry objects and an instancer node that replaces the geometry with instances.
