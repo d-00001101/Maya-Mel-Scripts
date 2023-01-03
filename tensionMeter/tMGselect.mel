@@ -1,0 +1,99 @@
+// Copyright (C) 2002 Daniel Arzabe
+// For changes or additions you can contact me at: daniel_arz@yahoo.com
+// This window gives you quick access to your tensionMeter groups.
+// If you have many disparate groups to access, this window will
+// simplify the process of selecting and deleting groups and their 
+// particular expression nodes.
+
+
+
+
+global proc tMGselection(string $tMGOptionMenuGrp)
+   {
+   select(`optionMenuGrp -q -v $tMGOptionMenuGrp`);
+   }
+
+
+
+ 
+
+global proc tMGdeletion(string $tMGOptionMenuGrp2) 
+   {
+   string $deletionItem = `optionMenuGrp -q -v $tMGOptionMenuGrp2`;
+   if ($deletionItem != "Meter_Groups"){   
+   string $returnVal = `confirmDialog -title "Delete tMGroup?"
+                       -message "tMGroup and all expression connections will be deleted"
+                       -button "OK"
+                       -button "Cancel"
+                       -db "OK"
+                       -cb "Cancel"
+                       -ds "Cancel"`;
+    if ($returnVal == "OK"){
+       string $list[] = `listConnections -t expression $deletionItem`;
+       print ($list);
+       string $expNode;
+       for ($expNode in $list) {
+          if ( `objExists $expNode`){
+              delete $expNode;
+          }
+       }
+    delete $deletionItem;
+    deleteUI tMGSelectWindow;
+    tMGselect();
+    }
+    else {
+       print("Cancelled: Delete tMGroup");
+    }
+    }
+}
+
+    
+
+global proc tMGselect()
+   {
+   
+   global string $tMGOptionMenuGroups;
+   global string $tMGOptionMenuGroups2;
+   
+   if(!( `objExists Meter_Groups` ))
+      {
+      error "No Meter Groups created.";
+      }
+      
+   
+   
+   string $groupTMGNames[] = `ls -dag "Meter_Groups"`; 
+   
+    
+   
+   window -w 210 -h 50 -mnb true -s true -t "tensionMeter Groups" -in "tM Groups" tMGSelectWindow;
+   columnLayout;
+      frameLayout -bv false -w 210 -l "";
+         columnLayout;
+            string $tMGOptionMenuGroups = `optionMenuGrp -w 210 -h 30 -cw2 85 100 
+                                           -l "Select Group"
+                                           -cc "tMGselection($tMGOptionMenuGroups);"
+                                           selectionOptionMenuGroup`;
+            
+            
+            
+            for($group in $groupTMGNames){
+               menuItem -l $group;
+               }
+         setParent.. ;
+      setParent.. ;
+          
+            string $tMGOptionMenuGroups2 = `optionMenuGrp -w 210 -h 30 -cw2 85 100 
+                                           -l "Delete Group"
+                                           -cc "tMGdeletion($tMGOptionMenuGroups2);"`;
+            
+            
+            
+            for($group in $groupTMGNames){
+               menuItem -l $group;
+               }
+   showWindow tMGSelectWindow;
+ }
+    
+
+   

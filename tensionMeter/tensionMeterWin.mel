@@ -1,0 +1,350 @@
+// Copyright (C) 2002 Daniel Arzabe
+// For changes or additions you can contact me at: daniel_arz@yahoo.com
+// 
+//  tensionMeter.mel
+//
+//   <description>  This script calculates the magnitude of a keyable attribute's change in value 
+//                  to "drive" a secondary value.
+//
+//   <synopsis>   tensionMeterProc( int $createAddGroup, string $driverAttr, string $drivenAttr, string $newAttrName, string $groupName)
+//
+//   <arguments>   int $createAddGroup - 0 will create a new tensionMeter group
+//                                       1 will add a user defined attribute to an existing tensionMeter group
+//                 string $driverAttr - the name of the "driver" node and the attribute
+//                 string $drivenAttr - the name of the "driven" node and the attribute
+//                 string $newAttrName - the name of the new attr added to the tensionMeter group
+//                                       that allows the user to explicitly change the "driven" attr value
+//                 string $groupName = the name of the group that will be created or the name of
+//                                     an existing group to be altered
+//
+//   <directions>   Select two nodes and type "tensionMeterWin()".  You have the option of creating a
+//                  new group or adding attributes to an existing group.  Type the name of the new attr
+//                  and press ok/add.
+//
+//                  A parent node by the name of "Meter_Groups" will be created automatically.
+//                  The child nodes will contain the tensionMeter attributes.  They are:
+//
+//                     Additive Meter - on or off. If "on", tensionMeter will use the positive change
+//                     in value to calculate the magnitude. The negative 
+//                     change in value will produce an attenuation of the magnitude.  If "off", the 
+//                     effects will be the same but with the negative change in value as determinant of magnitude. 
+//
+//                     Add Min Units, Add Units Frame - these attributes define a range in values.
+//                     The tension between these two values determine the magnitude in
+//                     values from one frame to the next.  Add Min Units is the minimum change in value 
+//                     that affects the "driven" attr.  Add Units Frame is the maximum change in
+//                     value that affects the "driven" attr.
+//
+//                     Subtractive Meter - non-keyable.  Reflects the opposite state of Additve Meter attr.
+//
+//                     Sub Min Units, Sub Units Frame - Serve the same purpose as their Additive
+//                     counterparts.
+//
+//                     Attenuation - 0 to 1 value. Determines the rate at which the magnitude attenuates
+//                     when the driver attr is at rest or in the case of additive mode, the change 
+//                     in value is negative.
+//                     
+//                     New Attr, New Attr_scale - these attr give the user explicit control over the 
+//                     "driven" attr with the option to scale the value in a positive or negative
+//                     direction.
+
+
+
+
+//
+
+proc hideAttributes(string $nodeName)
+   {
+   string $keyableAttr[] = `listAttr -k $nodeName`;
+   string $hideThisAttr;
+   for ($hideThisAttr in $keyableAttr)
+      {
+      setAttr -k false ($nodeName + "." + $hideThisAttr);
+      }
+   }
+//---------------------------------------------------------------------
+   
+//
+
+proc doesMeterGroupExist(string $groupName)
+   {
+   string $meter_GroupChildren[] = `ls -dag Meter_Groups`;
+   string $matchingGroup;
+   for ($matchingGroup in $meter_GroupChildren)
+      {
+      if ($matchingGroup == $groupName){
+      error "Please choose a different group name.";
+      }
+   }
+}
+
+//---------------------------------------------------------------------
+
+//
+
+global proc tensionMeterReloadButtonAction()
+   {
+   string $numberOfSelctions[] = `ls -sl`;
+   if (size($numberOfSelctions) <= 1)
+      {
+      error "Please select a \"Driver\" node and a \"Driven\" node.";
+      }
+      else
+      {
+      deleteUI tensionMeterWindow;
+      tensionMeterWin();
+      }
+   }
+
+//--------------------------------------------------------------------
+
+//
+
+global proc tensionMeterProc( int $createAddGroup, string $driverAttr, string $drivenAttr, string $newAttrName, string $groupName)
+   {
+
+   string $meter_GroupsNodeExists[] = `ls -l Meter_Groups`;
+   if (!size($meter_GroupsNodeExists))
+      {
+      createNode transform -n Meter_Groups;
+      hideAttributes("Meter_Groups");
+      }
+
+
+
+   switch ($createAddGroup)
+      {
+         case 0:
+            doesMeterGroupExist($groupName);
+            //
+            createNode transform -n $groupName -p Meter_Groups;
+            hideAttributes($groupName);
+            addAttr -ln "additiveMeter" -at bool -keyable true -dv 1 $groupName;
+            addAttr -ln "addMinUnits" -at "float" -keyable true -min 0 $groupName;   
+            addAttr -ln "addUnitsFrame" -at "float" -keyable true -dv 5 -min 0 $groupName;
+            addAttr -ln "subtractiveMeter" -at bool -keyable true $groupName;
+            addAttr -ln "subMinUnits" -at "float" -keyable true -min 0 $groupName;
+            addAttr -ln "subUnitsFrame" -at "float" -keyable true -dv 5 -min 0 $groupName;
+            addAttr -ln "attenuation" -at "float" -keyable true -dv .1 $groupName;
+            
+
+           
+            addAttr -ln $newAttrName -at "float" -keyable true -min 0 -max 1 -dv 0 $groupName;
+            addAttr -ln ($newAttrName + "_scale") -at "float"  -keyable true -dv 1 $groupName;
+            
+            string $addOrSub = 
+            $groupName + ".subtractiveMeter = (!" + $groupName + ".additiveMeter);";
+            expression -s $addOrSub -n ($groupName + "_Add_Sub_Expression");
+            break;
+
+         case 1:
+           
+            addAttr -ln $newAttrName -at "float" -keyable true -min 0 -max 1 -dv 0 $groupName;
+            addAttr -ln ($newAttrName + "_scale") -at "float"  -keyable true -dv 1 $groupName;
+            break;
+      }
+
+
+   string $meterExpression = 
+   "float $invValue;\n" +
+   "float $explicitValue;\n" + 
+   "float $previousValue;\n" + 
+   "float $drivenValue;\n" +   
+   "float $currentValue = " + $driverAttr + ";\n" + 
+   "float $difValue = $currentValue - $previousValue;\n"+
+
+   "if (($difValue > 0) && (" + $groupName + ".additiveMeter))\n"+
+   "{\n"+
+   "$drivenValue = linstep(" + $groupName + ".addMinUnits," + $groupName + ".addUnitsFrame,$difValue) * " + $groupName + "." + $newAttrName + "_scale;\n"+
+   "}\n"+
+   "else if (($difValue > 0) && (!" + $groupName + ".additiveMeter))\n"+
+   "{\n"+
+   "$drivenValue = $drivenValue * (1 - " + $groupName + ".attenuation);\n"+
+   "}\n"+
+   "else if (($difValue < 0) && (" + $groupName + ".subtractiveMeter))\n"+
+   "{\n"+
+   
+   "$drivenValue =(1 - linstep(" + $groupName + ".subUnitsFrame * -1," + $groupName + ".subMinUnits * -1, $difValue)) * " + $groupName + "." + $newAttrName + "_scale;\n"+
+   
+   "}\n"+
+   "else if (($difValue < 0) && (!" + $groupName + ".subtractiveMeter))\n"+
+   "{\n"+
+   "$drivenValue = $drivenValue * (1 - " + $groupName + ".attenuation);\n"+
+   "}\n"+
+   "else\n"+
+   "{\n"+
+   "$drivenValue = $drivenValue * (1 - " + $groupName + ".attenuation);\n"+
+   "}\n"+
+   "$invValue = 1 - $drivenValue;\n"+                                      
+   "$explicitValue = " + $groupName + "." + $newAttrName + ";\n"+          
+   "float $previousValue = $currentValue;\n" +                             
+   $drivenAttr + " = $drivenValue + ($explicitValue * $invValue);\n"; 
+                                                                            
+                                                                           
+   
+
+   expression -s $meterExpression -n ($newAttrName + "_Expression");
+   }
+
+
+//---------------------------------------------------------------------
+
+
+
+global proc tensionMeterOkButtonAction(string $okButtonControlNames[])
+
+   {
+   int $createAddValue = `checkBox -q -v $okButtonControlNames[1]`;
+   string $meterArguments[];
+   string $textScrollQuery0[] = `textScrollList -q -si $okButtonControlNames[3]`; 
+   $meterArguments[0] = $textScrollQuery0[0];
+   string $textScrollQuery1[] = `textScrollList -q -si $okButtonControlNames[4]`;
+   $meterArguments[1] = $textScrollQuery1[0]; 
+   $meterArguments[2] = $meterArguments[0] + "." + $meterArguments[1]; 
+   string $textScrollQuery3[] = `textScrollList -q -si $okButtonControlNames[5]`;
+   $meterArguments[3] = $textScrollQuery3[0];
+   string $textScrollQuery4[] = `textScrollList -q -si $okButtonControlNames[6]`;
+   $meterArguments[4] = $textScrollQuery4[0];
+   $meterArguments[5] = $meterArguments[3] + "." + $meterArguments[4];
+   $meterArguments[6] = `textFieldGrp -q -text $okButtonControlNames[7]`;
+   $meterArguments[7] = `textFieldGrp -q -text $okButtonControlNames[0]`;
+   
+   
+   tensionMeterProc( $createAddValue, $meterArguments[2], $meterArguments[5], $meterArguments[6], $meterArguments[7]);
+
+   }
+
+//--------------------------------------------------------------------
+
+
+global proc tensionMeterAddButtonAction(string $addButtonControlNames[])
+   
+   {
+    int $createAddValue = `checkBox -q -v $addButtonControlNames[1]`;
+   string $meterArguments[];
+   string $textScrollQuery0[] = `textScrollList -q -si $addButtonControlNames[3]`; 
+   $meterArguments[0] = $textScrollQuery0[0];
+   string $textScrollQuery1[] = `textScrollList -q -si $addButtonControlNames[4]`;
+   $meterArguments[1] = $textScrollQuery1[0]; 
+   $meterArguments[2] = $meterArguments[0] + "." + $meterArguments[1]; 
+   string $textScrollQuery3[] = `textScrollList -q -si $addButtonControlNames[5]`;
+   $meterArguments[3] = $textScrollQuery3[0];
+   string $textScrollQuery4[] = `textScrollList -q -si $addButtonControlNames[6]`;
+   $meterArguments[4] = $textScrollQuery4[0];
+   $meterArguments[5] = $meterArguments[3] + "." + $meterArguments[4];
+   $meterArguments[6] = `textFieldGrp -q -text $addButtonControlNames[7]`;
+   string $optionMenuQuery = `optionMenuGrp -q -v $addButtonControlNames[2]`;
+   $meterArguments[7] = $optionMenuQuery;  
+   
+   
+   tensionMeterProc( $createAddValue, $meterArguments[2], $meterArguments[5], $meterArguments[6], $meterArguments[7]);
+   }
+
+//---------------------------------------------------------------------
+
+
+global proc tensionMeterWin() {
+
+     global string $okButtonArrayValues[];
+
+   
+
+   string $meterSelections[] = `ls -sl`;
+   if (size($meterSelections) <= 1)
+      {
+      error "Please select a \"Driver\" node and a \"Driven\" node.";
+      }
+   string $driverSelectionAttr[] = `listAttr -m -k $meterSelections[0]`;
+   string $drivenSelectionAttr[] = `listAttr -m -k $meterSelections[1]`;
+
+   string $existingMeterChildGroups[] = `ls -dag Meter_Groups`;
+
+   //window
+
+   window -rtf true -title "Tension Meter" -in "Tension Meter" tensionMeterWindow;
+      columnLayout;
+      frameLayout -label "Creation Options" -li 10 -bv true -bs "etchedIn" -la "center";
+         columnLayout;
+         
+         
+         
+         $okButtonArrayValues[0] = `textFieldGrp -label "New Group Name" groupNameField`;
+         separator -w 380;
+            rowLayout -nc 2 -columnWidth 1 141;       
+            text -label "";
+            
+            
+            
+            $okButtonArrayValues[1] = `checkBox -label "Specify Group"
+                                       -onc "optionMenuGrp -e -en true $okButtonArrayValues[2]; textFieldGrp -e -en false groupNameField; button -e -en true addButton; button -e -en false okButton;"
+                                       -ofc "optionMenuGrp -e -en false $okButtonArrayValues[2]; textFieldGrp -e -en true groupNameField; button -e -en false addButton; button -e -en true okButton;" `;
+            setParent ..;
+          
+          
+            
+         $okButtonArrayValues[2] = `optionMenuGrp -en false -cal 1 "right" 
+                                    -label "Existing Groups" -cw2 141 150`;
+                                    
+            
+                                    
+            for ($i = 1; $i < (size($existingMeterChildGroups)); $i++)
+               {
+               menuItem -label $existingMeterChildGroups[$i];
+               }
+         setParent ..;
+      setParent ..;
+      frameLayout -l "Driver" -w 384 -li 10 -mh 10 -mw 10
+		    -bv true -bs "etchedIn" -la "center";
+            paneLayout -cn "vertical2" -w 360  -h 60;
+            
+               
+               
+               $okButtonArrayValues[3] = `textScrollList -numberOfRows 4 -sii 1 
+                                             -a $meterSelections[0]`;
+               
+                
+                                            
+               $okButtonArrayValues[4] = `textScrollList`; 
+                   for($appendDriverAttr in $driverSelectionAttr)
+                      {
+                       textScrollList -edit -a $appendDriverAttr $okButtonArrayValues[4];
+                      } 
+            setParent ..;
+         setParent ..;
+      frameLayout -l "Driven" -w 384 -li 10 -mh 10 -mw 10
+		     -bv true -bs "etchedIn" -la "center";
+         columnLayout;
+            paneLayout -cn "vertical2" -w 360 -h 60;
+            
+               
+               
+               $okButtonArrayValues[5] = `textScrollList -numberOfRows 4 -sii 1
+                                            -a $meterSelections[1]`;
+                                            
+               
+                                            
+               $okButtonArrayValues[6] = `textScrollList`;
+                   for($appendDrivenAttr in $drivenSelectionAttr)
+                      {
+
+                      if ((`connectionInfo -isDestination ($meterSelections[1] + "." + $appendDrivenAttr)`) < 1) 
+                         {
+                          textScrollList -edit -a $appendDrivenAttr $okButtonArrayValues[6];
+                         }
+                      }                      
+                setParent ..;
+            text -label "";
+
+            $okButtonArrayValues[7] = `textFieldGrp -label "New Attribute Name" -cw 1 121`;
+            setParent ..;
+         setParent ..;
+      frameLayout -bv false -lv false -mh 10 -mw 10;
+         rowLayout -nc 4 -cw4 91 91 91 91;
+         
+            button -label "OK" -w 91 -c "tensionMeterOkButtonAction($okButtonArrayValues);" okButton; 
+            button -label "Add" -en false -w 91 -c "tensionMeterAddButtonAction($okButtonArrayValues);" addButton;
+            button -label "Reload" -w 91 -c "tensionMeterReloadButtonAction()" reloadButton;
+            button -label "Cancel" -w 91 -c "deleteUI tensionMeterWindow;" cancelButton; 
+showWindow tensionMeterWindow;
+}
+
